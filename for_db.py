@@ -1,10 +1,10 @@
-import yaml
-from datetime import datetime
+import yaml, os
+from datetime import datetime, timedelta
 from telebot import types
-import errno, os
 
-users_path = "database/users.yaml"
-user_path = "database/users/{}.yaml"
+config = yaml.safe_load(open("config.yaml"))
+users_path = config["users_path"]
+user_path = config["user_path"]
 
 
 def check_user(user_id: int) -> dict:
@@ -30,9 +30,11 @@ def new_user(message: types.Message) -> bool:
         "first_name": message.chat.first_name,
         "last_name": message.chat.last_name,
         "time_created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "last_message": None,
+        "remind_delta": 12 * 60 * 60,  # 12 часов по умолчанию
     }
 
-    users = yaml.safe_load(open(users_path, "r"))
+    users = yaml.safe_load(open(users_path, "r"), encoding="utf-8")
 
     if not users:
         users = {}
@@ -54,7 +56,9 @@ def new_user(message: types.Message) -> bool:
     return True
 
 
-def add_note(id: int, text: str, time_notif: datetime = None, list: str = "Default"):
+def add_note(
+    id: int, text: str, time_notif: datetime = None, list: str = "Default"
+) -> bool:
     if not check_user(id):
         return False
 
@@ -127,7 +131,7 @@ def add_note(id: int, text: str, time_notif: datetime = None, list: str = "Defau
     return True
 
 
-def get_notes(id, list="Default"):
+def get_notes(id: int, list="Default") -> dict:
     if not check_user(id):
         return None
 
@@ -139,7 +143,7 @@ def get_notes(id, list="Default"):
     return notes[list] if list in notes else None
 
 
-def delete_note(id, note_ind, list="Default"):
+def delete_note(id, note_ind, list="Default") -> bool:
     if not check_user(id):
         return False
 
@@ -169,3 +173,63 @@ def delete_note(id, note_ind, list="Default"):
         file.write(yaml_data)
 
     return True
+
+
+def new_message(message: types.Message) -> int:
+    id = message.chat.id
+    new_msg_id = message.message_id
+
+    if not check_user(id):
+        return None
+
+    users = yaml.safe_load(open(users_path, "r", encoding="utf-8"))
+
+    user = users[id]
+
+    if "last_message" not in user:
+        user["last_message"] = None
+
+    last_id = user["last_message"]
+    user["last_message"] = new_msg_id
+
+    users[id] = user
+
+    yaml_data = yaml.dump(
+        users,
+        default_flow_style=False,
+        encoding="utf-8",
+        allow_unicode=True,
+        width=float("inf"),
+        sort_keys=False,
+    )
+
+    with open(users_path, "wb") as file:
+        file.write(yaml_data)
+
+    return last_id
+
+
+def check_old_notes() -> list[int, str, int]:  # возвращает первую устаревшую заметку
+    users = yaml.safe_load(open(users_path, "r", encoding="utf-8"))
+
+    for user_id in users.keys():
+        notes = yaml.safe_load(open(user_path.format(user_id), "r", encoding="utf-8"))
+
+        if "remind_delta" not in users[user_id]:
+            users[user_id]["remind_delta"] = 12 * 60 * 60  # не сохранится!
+
+        timedt = timedelta(seconds=users[user_id]["remind_delta"])
+
+        for list in notes.keys():
+            for ind in range(len(notes[list]["notes"])):
+                if (
+                    notes[list]["notes"][ind]["time_notif"]
+                    and datetime.strptime(
+                        notes[list]["notes"][ind]["time_notif"], "%Y-%m-%d %H:%M:%S"
+                    )
+                    - timedt
+                    < datetime.now()
+                ):
+                    return user_id, list, ind
+
+    return None, None, None

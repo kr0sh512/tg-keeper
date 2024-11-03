@@ -1,14 +1,14 @@
 #!/usr/bin/python3.3
-import threading, telebot, schedule, time, random, yaml
+import threading, telebot, schedule, time, yaml
 from datetime import datetime
-import os, sys
-from telebot import types
+import os, sys, inspect
+import re, locale
 from telegram.constants import ParseMode
+from telebot import types
 import for_db as db
-import re
-import locale
 
 config = yaml.safe_load(open("config.yaml"))
+lang = yaml.safe_load(open("lang.yaml"))["ru"]
 bot = telebot.TeleBot(
     config["api_token"],
     colorful_logs=True,
@@ -19,12 +19,13 @@ bot = telebot.TeleBot(
 admin_id = config["admin_id"]
 bot_username = config["bot_username"]
 
+
 locale.setlocale(locale.LC_ALL, "ru_RU.UTF-8")
 
 
-def is_admin(message):
+def is_admin(message: types.Message):
     if (
-        str(message.from_user.id) == admin_id
+        str(message.from_user.id) == str(admin_id)
         and message.from_user.id == message.chat.id
     ):
         return True
@@ -33,37 +34,33 @@ def is_admin(message):
 
 
 @bot.message_handler(commands=["restart", "r"])
-def restart_bot(message):
+def restart_bot(message: types.Message):
     if is_admin(message):
         send_admin_message("bye")
         os.execv(sys.executable, ["python3", "-u"] + sys.argv)
 
 
 @bot.message_handler(commands=["start"])
-def start(message):
+def start(message: types.Message):
 
-    print(db.new_user(message))
+    send_message(message, lang["start_message"])
 
     return
 
 
 @bot.message_handler(commands=["help", "faq"])
-def help(message):
-    help_msg = "Мои команды:\
-            \n/start - используй, чтобы сменить номер группы.\
-            \n/list - список напоминаний.\
-            \n/source - Страница бота на Github\
-            \n\nИли же можно всегда написать напрямую: @Kr0sH_512"
+def help(message: types.Message):
+    help_msg = lang["help_message"].format(config["bot_username"])
 
-    send_message(message.chat.id, help_msg)
+    send_message(message, help_msg)
 
     return
 
 
 @bot.callback_query_handler(func=lambda call: "#return" in call.data)
 def send_notes_callback(call):
-    list_notes(call.message, call.data.split("#")[0])
-    bot.delete_message(call.message.chat.id, call.message.message_id)
+
+    list_notes(call.message, call.data.split("#")[0], edit=True)
 
     return
 
@@ -77,13 +74,9 @@ def delete_notes_callback(call):
 
     db.delete_note(call.message.chat.id, note_ind, prefix)
 
-    bot.edit_message_text(
-        f"❌ Удалено:\n\n{note['text']}",
-        call.message.chat.id,
-        call.message.message_id,
-    )
+    list_notes(call.message, prefix, edit=True)
 
-    list_notes(call.message, prefix)
+    bot.send_message(call.message.chat.id, f"❌ Удалено:\n\n{note['text']}")
 
     return
 
@@ -132,18 +125,15 @@ def choose_note_callback(call):
     page = int(call.data.split("#")[2])
     prefix = call.data.split("#")[0]
     markup = types.InlineKeyboardMarkup()
-    num_on_page = 8  # Лимит телеграмма
+    num_on_page = 6  # Лимит телеграмма - 8
     notes = db.get_notes(call.message.chat.id, prefix)["notes"]
 
     max_page = (len(notes) - 1) // num_on_page
-
     lst_button = []
 
     for i in range(num_on_page):
-        # Calculate the index of the current program
         ind = i + page * num_on_page
 
-        # Create an inline keyboard button for the program
         lst_button.append(
             types.InlineKeyboardButton(
                 ind + 1,
@@ -154,11 +144,9 @@ def choose_note_callback(call):
         if ind == len(notes) - 1:
             break
 
-    # Create the inline keyboard markup from the list of buttons
     markup = types.InlineKeyboardMarkup([lst_button])
 
     if len(notes) > num_on_page:
-        # Create the back button (only visible if we're not on the first page)
         back_btn = (
             types.InlineKeyboardButton(
                 "Назад", callback_data=f"{prefix}#select#{page - 1}"
@@ -167,13 +155,11 @@ def choose_note_callback(call):
             else None
         )
 
-        # Create the current page button
         now_btn = types.InlineKeyboardButton(
             f"{page + 1}/{max_page + 1}",
             callback_data=f"{prefix}#select#{0 if page > 0 else max_page}",
         )
 
-        # Create the next button (only visible if we're not on the last page)
         next_btn = (
             types.InlineKeyboardButton(
                 "Вперед", callback_data=f"{prefix}#select#{page + 1}"
@@ -182,7 +168,6 @@ def choose_note_callback(call):
             else None
         )
 
-        # Add the buttons to the inline keyboard markup
         markup.row(*[i for i in [back_btn, now_btn, next_btn] if i])
 
     markup.add(
@@ -202,34 +187,18 @@ def choose_note_callback(call):
     return
 
 
+@bot.message_handler(commands=["settings", "setting", "edit"])
+def display_settings(message: types.Message):
+
+    return
+
+
 @bot.message_handler(commands=["list"])
-def list_notes(message, list="Default"):
-
-    notes = db.get_notes(message.chat.id, list)
-
-    if not notes or not notes["notes"]:
-        send_message(message.chat.id, "У вас нет напоминаний.")
-
-        return
-
-    list_notes = notes["notes"]
-
-    for i in range(len(list_notes)):
-        if list_notes[i]["time_notif"]:
-            if (
-                datetime.strptime(list_notes[i]["time_notif"], "%Y-%m-%d %H:%M:%S")
-                - datetime.now()
-            ).days < 0:
-                send_message(
-                    message.chat.id,
-                    f"❌ {list_notes[i]['text']} (просрочено: {list_notes[i]['time_notif']})",
-                )
-                db.delete_note(message.chat.id, i)
-
+def list_notes(message: types.Message, list: str = "Default", edit: bool = False):
     notes = db.get_notes(message.chat.id, list)
 
     if not notes:
-        send_message(message.chat.id, "У вас нет напоминаний.")
+        send_message(message, lang["no_reminders"])
 
         return
 
@@ -250,15 +219,27 @@ def list_notes(message, list="Default"):
         )
     )
 
-    send_message(message.chat.id, notes_msg, markup)
+    if edit:
+        bot.edit_message_text(
+            notes_msg, message.chat.id, message.message_id, reply_markup=markup
+        )
+
+        return
+
+    msg = send_message(message, notes_msg, markup)
+
+    old_msg_id = db.new_message(msg)
+
+    if old_msg_id:
+        bot.delete_message(message.chat.id, old_msg_id)
 
     return
 
 
 @bot.message_handler(content_types=["text"])
-def text_message(message):
+def text_message(message: types.Message):
     if message.chat.type == "supergroup" and bot_username not in message.text:
-        # print(message.text)
+
         return  # ignore messages from supergroups
 
     if db.check_user(message.chat.id) is None:
@@ -293,10 +274,10 @@ def text_message(message):
     }
 
     def translate_date_to_datetime(date_str):
-        for ru_month, en_month in month_mapping.items():
-            if ru_month in date_str:
-                date_str = date_str.replace(ru_month, en_month)
-                # break
+        for month_from, month_to in month_mapping.items():
+            if month_from in date_str:
+                date_str = date_str.replace(month_from, month_to)
+                break
         try:
             return datetime.strptime(date_str, "%d %B").replace(
                 year=datetime.now().year
@@ -319,7 +300,6 @@ def text_message(message):
     for pattern in date_patterns:
         match = re.search(pattern, message.text, re.IGNORECASE)
         if match:
-            # print(match.group())
             date_found_dt = translate_date_to_datetime(match.group())
 
             break
@@ -334,18 +314,22 @@ def text_message(message):
         date_found_dt,
     )
 
-    send_message(message.chat.id, "📝 Напоминание добавлено:")
+    send_message(message, "📝 Напоминание добавлено:")
     list_notes(message)
 
     return
 
 
-def send_message(id, text, markup=None, thread_id="General"):
-    if thread_id == "General":
-        thread_id = None
+def send_message(
+    message: types.Message, text, markup=None, thread_id=None
+) -> types.Message:
+    id = message.chat.id
+
+    if not thread_id:
+        thread_id = message.message_thread_id
 
     try:
-        bot.send_message(
+        msg = bot.send_message(
             chat_id=id,
             text=text,
             message_thread_id=thread_id,
@@ -354,22 +338,22 @@ def send_message(id, text, markup=None, thread_id="General"):
     except Exception as e:
         time.sleep(5)
         try:
-            bot.send_message(
+            msg = bot.send_message(
                 chat_id=id,
                 text=text,
                 message_thread_id=thread_id,
                 reply_markup=markup,
             )
         except Exception as e:
-            text_error = "Error from user: <code>{}</code>\n{}".format(id, str(e))
-            # send_admin_message(text_error)
+            text_error = "\tError from user {}: \n{}\n\t---\n".format(id, str(e))
             print(f"--- {text_error} ---")
 
-    return
+    return msg
 
 
 def send_admin_message(text):
-    send_message(admin_id, "🛑 " + text)
+    text += f"\n\ncalled by:{inspect.stack()[1][3]}"
+    bot.send_message(admin_id, f"🛑 {text}")
 
     return
 
@@ -381,10 +365,22 @@ if __name__ == "__main__":
         target=bot.infinity_polling,
         name="bot_infinity_polling",
         daemon=True,
-        # kwargs={"restart_on_change": True},
     ).start()
 
     while True:  # keep alive
-        # добавить проверку живых напоминаний, удалять, если они не нужны
-        print("I'm alive!")
-        time.sleep(36000)  # 10 hours
+        chat_id, list, ind_note = db.check_old_notes()
+
+        if chat_id:
+            note = db.get_notes(chat_id, list)["notes"][ind_note]
+
+            db.delete_note(chat_id, ind_note, list)
+
+            msg = bot.send_message(
+                chat_id,
+                f"❌ {note['text']} \n(Уведомление: {datetime.strptime(note['time_notif'], '%Y-%m-%d %H:%M:%S').strftime('%d %B %Y')})",
+                timeout=1,
+            )
+
+            list_notes(msg, list)
+
+        time.sleep(15)
