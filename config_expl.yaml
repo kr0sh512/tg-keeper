@@ -1,0 +1,6 @@
+admin_id: "856850518"
+api_token: null
+test_token: null
+bot_username: "@keeper_inbot"
+users_path: "database/users.yaml"
+user_path: "database/users/{}.yaml"

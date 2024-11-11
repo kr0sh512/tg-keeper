@@ -23,37 +23,20 @@ def new_user(message: types.Message) -> bool:
     if check_user(message.chat.id):
         return False
 
-    user = {
-        "id": message.chat.id,
-        "type": message.chat.type,
-        "username": message.chat.username,
-        "first_name": message.chat.first_name,
-        "last_name": message.chat.last_name,
-        "time_created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "last_message": None,
-        "remind_delta": 12 * 60 * 60,  # 12 часов по умолчанию
-    }
-
-    users = yaml.safe_load(open(users_path, "r"), encoding="utf-8")
-
-    if not users:
-        users = {}
-
-    users[user["id"]] = user
-
-    yaml_data = yaml.dump(
-        users,
-        default_flow_style=False,
-        encoding="utf-8",
-        allow_unicode=True,
-        width=float("inf"),
-        sort_keys=False,
+    update_user_settings(message.chat.id, "id", message.chat.id)
+    update_user_settings(message.chat.id, "type", message.chat.type)
+    update_user_settings(message.chat.id, "username", message.chat.username)
+    update_user_settings(message.chat.id, "first_name", message.chat.first_name)
+    update_user_settings(message.chat.id, "last_name", message.chat.last_name)
+    update_user_settings(
+        message.chat.id, "time_created", datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     )
+    update_user_settings(message.chat.id, "last_message", None)
+    update_user_settings(
+        message.chat.id, "remind_delta", 12 * 60 * 60
+    )  # 12 часов по умолчанию
 
-    with open(users_path, "wb") as file:
-        file.write(yaml_data)
-
-    return True
+    return
 
 
 def add_note(
@@ -233,3 +216,38 @@ def check_old_notes() -> list[int, str, int]:  # возвращает перву
                     return user_id, list, ind
 
     return None, None, None
+
+
+def update_user_settings(user_id: int, param: str, value: any) -> bool:
+    users = yaml.safe_load(open(users_path, "r", encoding="utf-8"))
+
+    if not users:
+        users = {}
+
+    if user_id not in users:
+        users[user_id] = {}
+
+    users[user_id][param] = value
+
+    yaml_data = yaml.dump(
+        users,
+        default_flow_style=False,
+        encoding="utf-8",
+        allow_unicode=True,
+        width=float("inf"),
+        sort_keys=False,
+    )
+
+    with open(users_path, "wb") as file:
+        file.write(yaml_data)
+
+    return True
+
+
+def user_settings(user_id: int) -> dict:
+    if not check_user(user_id):
+        return None
+
+    users = yaml.safe_load(open(users_path, "r", encoding="utf-8"))
+
+    return users[user_id]

@@ -1,0 +1,4 @@
+pyyaml
+pytelegrambotapi
+schedule
+python-telegram-bot

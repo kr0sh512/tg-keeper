@@ -45,6 +45,9 @@ def start(message: types.Message):
 
     send_message(message, lang["start_message"])
 
+    if not db.check_user(message.chat.id):
+        db.new_user(message)
+
     return
 
 
@@ -53,6 +56,9 @@ def help(message: types.Message):
     help_msg = lang["help_message"].format(config["bot_username"])
 
     send_message(message, help_msg)
+
+    if not db.check_user(message.chat.id):
+        db.new_user(message)
 
     return
 
@@ -187,13 +193,89 @@ def choose_note_callback(call):
     return
 
 
-@bot.message_handler(commands=["settings", "setting", "edit"])
-def display_settings(message: types.Message):
+@bot.callback_query_handler(func=lambda call: "edit_time" in call.data)
+def edit_time(call):
+    list_time = {
+        (24 - 8) * 3600: "8:00 в день до напоминания",
+        (24 - 12) * 3600: "12:00 в день до напоминания",
+        (24 - 18) * 3600: "18:00 в день до напоминания",
+        0: "0:00 в день до напоминания",
+        (-8) * 3600: "8:00 в день напоминания",
+        (-12) * 3600: "12:00 в день напоминания",
+        (-18) * 3600: "18:00 в день напоминания",
+    }
+
+    if call.data[-1] == "#":
+        markup = types.InlineKeyboardMarkup()
+        for delta in list_time.keys():
+            markup.add(
+                types.InlineKeyboardButton(
+                    list_time[delta],
+                    callback_data=f"edit_time^{delta}",
+                )
+            )
+
+        bot.edit_message_text(
+            "⏰ Выберите время для уведомлений:",
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=markup,
+        )
+
+        return
+
+    delta = int(call.data.split("^")[1])
+
+    db.update_user_settings(call.message.chat.id, "remind_delta", delta)
+
+    bot.edit_message_text(
+        f"Выбранное время: \n\n{list_time[delta]}",
+        call.message.chat.id,
+        call.message.message_id,
+    )
 
     return
 
 
-@bot.message_handler(commands=["list"])
+@bot.message_handler(commands=["settings", "setting", "edit"])
+def display_settings(message: types.Message):
+    if not db.check_user(message.chat.id):
+        db.new_user(message)
+
+    settings_msg = "Изменить время отправки напоминания"
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton(
+            "Изменить время",
+            callback_data="edit_time#",
+        )
+    )
+
+    send_message(message, settings_msg, markup)
+
+    return
+
+    settings = db.user_settings(message.chat.id)
+    # if not settings:
+    #     send_message(message, lang["not_registered"])
+
+    #     return
+
+    settings_msg = "⚙️ <u>Настройки</u>:\
+        \n\nВремя до отправки уведомления: <b>{}</b>"
+
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton(
+            "Изменить время",
+            callback_data="edit_time#",
+        )
+    )
+
+    return
+
+
+@bot.message_handler(commands=["list", "lists", "l"])
 def list_notes(message: types.Message, list: str = "Default", edit: bool = False):
     notes = db.get_notes(message.chat.id, list)
 
@@ -242,14 +324,15 @@ def text_message(message: types.Message):
 
         return  # ignore messages from supergroups
 
-    if db.check_user(message.chat.id) is None:
+    if not db.check_user(message.chat.id):
         db.new_user(message)
 
     message.text = message.text.replace(f"{bot_username}", "").strip()
     if not message.text:
         if not message.reply_to_message:
             return
-        message.text = message.reply_to_message.text
+        # message.text = message.reply_to_message.text
+        message = message.reply_to_message
 
     date_patterns = [
         r"\b\d{1,2}\s(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b",
@@ -327,6 +410,8 @@ def send_message(
 
     if not thread_id:
         thread_id = message.message_thread_id
+
+    msg = None
 
     try:
         msg = bot.send_message(
