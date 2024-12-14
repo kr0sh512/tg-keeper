@@ -195,6 +195,9 @@ def new_message(message: types.Message) -> int:
 def check_old_notes() -> list[int, str, int]:  # возвращает первую устаревшую заметку
     users = yaml.safe_load(open(users_path, "r", encoding="utf-8"))
 
+    if not users:
+        users = {}
+
     for user_id in users.keys():
         notes = yaml.safe_load(open(user_path.format(user_id), "r", encoding="utf-8"))
 

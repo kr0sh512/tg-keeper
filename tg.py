@@ -1,14 +1,15 @@
 #!/usr/bin/python3.3
 import threading, telebot, schedule, time, yaml
 from datetime import datetime
-import os, sys, inspect
+import os, sys, inspect, random
 import re, locale
 from telegram.constants import ParseMode
 from telebot import types
 import for_db as db
 
 config = yaml.safe_load(open("config.yaml"))
-lang = yaml.safe_load(open("lang.yaml"))["ru"]
+lang = yaml.safe_load(open("lang.yaml", encoding="utf-8"))["ru"]
+list_reactions = yaml.safe_load(open("lang.yaml", encoding="utf-8"))["list_reaction"]
 bot = telebot.TeleBot(
     config["api_token"],
     colorful_logs=True,
@@ -310,6 +311,11 @@ def list_notes(message: types.Message, list: str = "Default", edit: bool = False
 
     msg = send_message(message, notes_msg, markup)
 
+    reaction = types.ReactionTypeEmoji(random.choice(list_reactions))
+    bot.set_message_reaction(
+        message.chat.id, message.message_id, [reaction], is_big=True
+    )
+
     old_msg_id = db.new_message(msg)
 
     if old_msg_id:
@@ -397,6 +403,11 @@ def text_message(message: types.Message):
         date_found_dt,
     )
 
+    reaction = types.ReactionTypeEmoji(random.choice(list_reactions))
+
+    bot.set_message_reaction(
+        message.chat.id, message.message_id, [reaction], is_big=True
+    )
     send_message(message, "📝 Напоминание добавлено:")
     list_notes(message)
 
