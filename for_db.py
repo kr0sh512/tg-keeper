@@ -199,6 +199,8 @@ def check_old_notes() -> list[int, str, int]:  # возвращает перву
         users = {}
 
     for user_id in users.keys():
+        if not os.path.exists(user_path.format(user_id)):
+            continue
         notes = yaml.safe_load(open(user_path.format(user_id), "r", encoding="utf-8"))
 
         if "remind_delta" not in users[user_id]:
@@ -242,6 +244,17 @@ def update_user_settings(user_id: int, param: str, value: any) -> bool:
     )
 
     with open(users_path, "wb") as file:
+        file.write(yaml_data)
+
+    with open(user_path.format(user_id), "wb") as file:
+        yaml_data = yaml.dump(
+            {},
+            default_flow_style=False,
+            encoding="utf-8",
+            allow_unicode=True,
+            width=float("inf"),
+            sort_keys=False,
+        )
         file.write(yaml_data)
 
     return True
