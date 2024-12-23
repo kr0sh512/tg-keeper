@@ -11,7 +11,7 @@ config = yaml.safe_load(open("config.yaml"))
 lang = yaml.safe_load(open("lang.yaml", encoding="utf-8"))["ru"]
 list_reactions = yaml.safe_load(open("lang.yaml", encoding="utf-8"))["list_reaction"]
 bot = telebot.TeleBot(
-    config["api_token"],
+    config["test_token"],
     colorful_logs=True,
     disable_web_page_preview=True,
     parse_mode=ParseMode.HTML,
@@ -19,7 +19,6 @@ bot = telebot.TeleBot(
 
 admin_id = config["admin_id"]
 bot_username = config["bot_username"]
-
 
 locale.setlocale(locale.LC_ALL, "ru_RU.UTF-8")
 
@@ -77,13 +76,13 @@ def delete_notes_callback(call):
     note_ind = int(call.data.split("#")[2])
     prefix = call.data.split("#")[0]
 
-    note = db.get_notes(call.message.chat.id, prefix)["notes"][note_ind]
+    note = db.get_notes(call.message.chat.id, prefix)[note_ind]
 
     db.delete_note(call.message.chat.id, note_ind, prefix)
 
     list_notes(call.message, prefix, edit=True)
 
-    bot.send_message(call.message.chat.id, f"❌ Удалено:\n\n{note['text']}")
+    bot.send_message(call.message.chat.id, f"❌ Удалено:\n\n{note['content']}")
 
     return
 
@@ -92,7 +91,7 @@ def delete_notes_callback(call):
 def edit_notes_callback(call):
     note_ind = int(call.data.split("#")[2])
     prefix = call.data.split("#")[0]
-    notes = db.get_notes(call.message.chat.id, prefix)["notes"]
+    notes = db.get_notes(call.message.chat.id, prefix)
 
     note = notes[note_ind]
 
@@ -112,10 +111,10 @@ def edit_notes_callback(call):
 
     text = f"📝 <b>Заметка {note_ind + 1}</b>"
 
-    if note["time_notif"]:
-        text += f" ⌚️ <b>{datetime.strptime(note['time_notif'], '%Y-%m-%d %H:%M:%S').strftime('%d %B %Y')}</b>"
+    if note["remind_at"]:
+        text += f" ⌚️ <b>{note['remind_at'].strftime('%d %B %Y')}</b>"
 
-    text += f"\n\n{note['text']}"
+    text += f"\n\n{note['content']}"
 
     bot.edit_message_text(
         text,
@@ -133,7 +132,7 @@ def choose_note_callback(call):
     prefix = call.data.split("#")[0]
     markup = types.InlineKeyboardMarkup()
     num_on_page = 6  # Лимит телеграмма - 8
-    notes = db.get_notes(call.message.chat.id, prefix)["notes"]
+    notes = db.get_notes(call.message.chat.id, prefix)
 
     max_page = (len(notes) - 1) // num_on_page
     lst_button = []
@@ -256,25 +255,6 @@ def display_settings(message: types.Message):
 
     return
 
-    settings = db.user_settings(message.chat.id)
-    # if not settings:
-    #     send_message(message, lang["not_registered"])
-
-    #     return
-
-    settings_msg = "⚙️ <u>Настройки</u>:\
-        \n\nВремя до отправки уведомления: <b>{}</b>"
-
-    markup = types.InlineKeyboardMarkup()
-    markup.add(
-        types.InlineKeyboardButton(
-            "Изменить время",
-            callback_data="edit_time#",
-        )
-    )
-
-    return
-
 
 @bot.message_handler(commands=["list", "lists", "l"])
 def list_notes(message: types.Message, list: str = "Default", edit: bool = False):
@@ -285,15 +265,13 @@ def list_notes(message: types.Message, list: str = "Default", edit: bool = False
 
         return
 
-    list_notes = notes["notes"]
-
     notes_msg = "⚡️ <u>Ваши напоминания</u>:\n\n"
-    for i in range(len(list_notes)):
+    for i in range(len(notes)):
         notes_msg += f"<b>{i + 1})</b> "
-        if list_notes[i]["time_notif"]:
-            notes_msg += f" ⌚️ <b>{datetime.strptime(list_notes[i]['time_notif'], '%Y-%m-%d %H:%M:%S').strftime('%d %B %Y')}:</b>\n"
+        if notes[i]["remind_at"]:
+            notes_msg += f" ⌚️ <b>{notes[i]['remind_at'].strftime('%d %B %Y')}:</b>\n"
 
-        notes_msg += f"{list_notes[i]['text']}\n\n"
+        notes_msg += f"{notes[i]['content']}\n\n"
 
     markup = types.InlineKeyboardMarkup()
     markup.add(
@@ -467,13 +445,13 @@ if __name__ == "__main__":
         chat_id, list, ind_note = db.check_old_notes()
 
         if chat_id:
-            note = db.get_notes(chat_id, list)["notes"][ind_note]
+            note = db.get_notes(chat_id, list)[ind_note]
 
             db.delete_note(chat_id, ind_note, list)
 
             msg = bot.send_message(
                 chat_id,
-                f"❌ {note['text']} \n(Уведомление: {datetime.strptime(note['time_notif'], '%Y-%m-%d %H:%M:%S').strftime('%d %B %Y')})",
+                f"❌ {note['content']} \n(Уведомление: {note['remind_at'].strftime('%d %B %Y')})",
                 timeout=1,
             )
 
