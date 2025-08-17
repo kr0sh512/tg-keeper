@@ -1,13 +1,15 @@
 import yaml, os
 from datetime import datetime, timedelta
 from telebot import types
+from typing import Optional
+from typing import Any
 
 config = yaml.safe_load(open("config.yaml"))
 users_path = config["users_path"]
 user_path = config["user_path"]
 
 
-def check_user(user_id: int) -> dict:
+def check_user(user_id: int) -> Optional[dict]:
     users = yaml.safe_load(open(users_path, "r", encoding="utf-8"))
 
     if not users:
@@ -36,11 +38,11 @@ def new_user(message: types.Message) -> bool:
         message.chat.id, "remind_delta", 12 * 60 * 60
     )  # 12 часов по умолчанию
 
-    return
+    return True
 
 
 def add_note(
-    id: int, text: str, time_notif: datetime = None, list: str = "Default"
+    id: int, text: str, time_notif: Optional[datetime] = None, list: str = "Default"
 ) -> bool:
     if not check_user(id):
         return False
@@ -114,7 +116,7 @@ def add_note(
     return True
 
 
-def get_notes(id: int, list="Default") -> dict:
+def get_notes(id: int, list="Default") -> Optional[dict]:
     if not check_user(id):
         return None
 
@@ -158,7 +160,7 @@ def delete_note(id, note_ind, list="Default") -> bool:
     return True
 
 
-def new_message(message: types.Message) -> int:
+def new_message(message: types.Message) -> Optional[int]:
     id = message.chat.id
     new_msg_id = message.message_id
 
@@ -192,7 +194,9 @@ def new_message(message: types.Message) -> int:
     return last_id
 
 
-def check_old_notes() -> list[int, str, int]:  # возвращает первую устаревшую заметку
+def check_old_notes() -> (
+    tuple[Optional[int], Optional[str], Optional[int]]
+):  # возвращает первую устаревшую заметку
     users = yaml.safe_load(open(users_path, "r", encoding="utf-8"))
 
     if not users:
@@ -223,7 +227,7 @@ def check_old_notes() -> list[int, str, int]:  # возвращает перву
     return None, None, None
 
 
-def update_user_settings(user_id: int, param: str, value: any) -> bool:
+def update_user_settings(user_id: int, param: str, value: Any) -> bool:
     users = yaml.safe_load(open(users_path, "r", encoding="utf-8"))
 
     if not users:
@@ -260,7 +264,7 @@ def update_user_settings(user_id: int, param: str, value: any) -> bool:
     return True
 
 
-def user_settings(user_id: int) -> dict:
+def user_settings(user_id: int) -> Optional[dict]:
     if not check_user(user_id):
         return None
 
