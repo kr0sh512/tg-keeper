@@ -311,12 +311,32 @@ def text_message(message: types.Message):
     if not db.check_user(message.chat.id):
         db.new_user(message)
 
-    message.text = message.text.replace(f"{bot_username}", "").strip()
     if not message.text:
+        return
+
+    mes_text = message.text
+    mes_entities = message.entities
+
+    if not message.text.replace(f"{bot_username}", "").strip():
         if not message.reply_to_message:
             return
-        # message.text = message.reply_to_message.text
-        message = message.reply_to_message
+        mes_text = message.reply_to_message.text
+        mes_entities = message.reply_to_message.entities
+
+    text = mes_text
+    html_parts = []
+    last_idx = 0
+    for ent in mes_entities:
+        if ent.type == "text_link":
+            html_parts.append(text[last_idx : ent.offset])
+            link_text = text[ent.offset : ent.offset + ent.length]
+            html_parts.append(f'<a href="{ent.url}">{link_text}</a>')
+            last_idx = ent.offset + ent.length
+
+    html_parts.append(text[last_idx:])
+    msg_text = "".join(html_parts)
+
+    msg_text = msg_text.replace(f"{bot_username}", "").strip()
 
     date_patterns = [
         r"\b\d{1,2}\s(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b",
@@ -365,7 +385,7 @@ def text_message(message: types.Message):
     date_found_dt = None
 
     for pattern in date_patterns:
-        match = re.search(pattern, message.text, re.IGNORECASE)
+        match = re.search(pattern, msg_text, re.IGNORECASE)
         if match:
             date_found_dt = translate_date_to_datetime(match.group())
 
@@ -377,7 +397,7 @@ def text_message(message: types.Message):
 
     db.add_note(
         message.chat.id,
-        message.text,
+        msg_text,
         date_found_dt,
     )
 
