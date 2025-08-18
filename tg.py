@@ -323,18 +323,19 @@ def text_message(message: types.Message):
         mes_text = message.reply_to_message.text
         mes_entities = message.reply_to_message.entities
 
-    text = mes_text
-    html_parts = []
-    last_idx = 0
-    for ent in mes_entities:
-        if ent.type == "text_link":
-            html_parts.append(text[last_idx : ent.offset])
-            link_text = text[ent.offset : ent.offset + ent.length]
-            html_parts.append(f'<a href="{ent.url}">{link_text}</a>')
-            last_idx = ent.offset + ent.length
+    if mes_entities:
+        text = mes_text
+        html_parts = []
+        last_idx = 0
+        for ent in mes_entities:
+            if ent.type == "text_link":
+                html_parts.append(text[last_idx : ent.offset])
+                link_text = text[ent.offset : ent.offset + ent.length]
+                html_parts.append(f'<a href="{ent.url}">{link_text}</a>')
+                last_idx = ent.offset + ent.length
 
-    html_parts.append(text[last_idx:])
-    msg_text = "".join(html_parts)
+        html_parts.append(text[last_idx:])
+        msg_text = "".join(html_parts)
 
     msg_text = msg_text.replace(f"{bot_username}", "").strip()
 
