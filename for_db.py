@@ -150,10 +150,13 @@ def delete_note(id, note_ind, list="Default") -> bool:
     curs.execute(
         """
         DELETE FROM notes
-        WHERE user_id = %s AND list_id = (SELECT id FROM lists WHERE name = %s AND user_id = %s)
-        ORDER BY remind_at IS NULL DESC, remind_at ASC, created_at DESC
-        LIMIT 1 OFFSET %s
-    """,
+        WHERE id = (
+            SELECT id FROM notes
+            WHERE user_id = %s AND list_id = (SELECT id FROM lists WHERE name = %s AND user_id = %s)
+            ORDER BY remind_at IS NULL DESC, remind_at ASC, created_at DESC
+            LIMIT 1 OFFSET %s
+        )
+        """,
         (id, list, id, note_ind),
     )
 
