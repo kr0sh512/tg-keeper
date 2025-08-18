@@ -322,6 +322,7 @@ def text_message(message: types.Message):
             return
         msg_text = message.reply_to_message.text
         msg_entities = message.reply_to_message.entities
+        message = message.reply_to_message
 
     if msg_entities:
         text = msg_text
