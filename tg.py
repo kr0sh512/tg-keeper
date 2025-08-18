@@ -44,7 +44,7 @@ def restart_bot(message: types.Message):
 @bot.message_handler(commands=["start"])
 def start(message: types.Message):
 
-    send_message(message, lang["start_message"])
+    send_message(message, lang["welcome_message"])
 
     if not db.check_user(message.chat.id):
         db.new_user(message)

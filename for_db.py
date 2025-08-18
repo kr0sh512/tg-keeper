@@ -8,6 +8,10 @@ config = yaml.safe_load(open("config.yaml"))
 users_path = config["users_path"]
 user_path = config["user_path"]
 
+if not os.path.exists(users_path):
+    with open(users_path, "w", encoding="utf-8") as f:
+        yaml.dump({}, f, default_flow_style=False, allow_unicode=True)
+
 
 def check_user(user_id: int) -> Optional[dict]:
     users = yaml.safe_load(open(users_path, "r", encoding="utf-8"))
@@ -228,6 +232,7 @@ def check_old_notes() -> (
 
 
 def update_user_settings(user_id: int, param: str, value: Any) -> bool:
+
     users = yaml.safe_load(open(users_path, "r", encoding="utf-8"))
 
     if not users:
