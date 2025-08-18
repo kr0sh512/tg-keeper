@@ -333,28 +333,28 @@ def text_message(message: types.Message):
     if not db.check_user(message.chat.id):
         db.new_user(message)
 
-    msg_text = message.text
+    if not message.text:
+        return
 
-    # msg_text = message.text.replace(f"{bot_username}", "").strip()
+    mes_text = message.text
+    mes_entities = message.entities
+
     if not message.text.replace(f"{bot_username}", "").strip():
         if not message.reply_to_message:
             return
-        # message.text = message.reply_to_message.text
-        message = message.reply_to_message
+        mes_text = message.reply_to_message.text
+        mes_entities = message.reply_to_message.entities
 
-    text = message.text
+    text = mes_text
     html_parts = []
     last_idx = 0
-    for ent in message.entities:
+    for ent in mes_entities:
         if ent.type == "text_link":
-            # Add text before the entity
             html_parts.append(text[last_idx : ent.offset])
             link_text = text[ent.offset : ent.offset + ent.length]
             html_parts.append(f'<a href="{ent.url}">{link_text}</a>')
             last_idx = ent.offset + ent.length
-        else:
-            # For other entities, just skip for now
-            continue
+
     html_parts.append(text[last_idx:])
     msg_text = "".join(html_parts)
 
