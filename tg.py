@@ -314,20 +314,20 @@ def text_message(message: types.Message):
     if not message.text:
         return
 
-    mes_text = message.text
-    mes_entities = message.entities
+    msg_text = message.text
+    msg_entities = message.entities
 
     if not message.text.replace(f"{bot_username}", "").strip():
         if not message.reply_to_message:
             return
-        mes_text = message.reply_to_message.text
-        mes_entities = message.reply_to_message.entities
+        msg_text = message.reply_to_message.text
+        msg_entities = message.reply_to_message.entities
 
-    if mes_entities:
-        text = mes_text
+    if msg_entities:
+        text = msg_text
         html_parts = []
         last_idx = 0
-        for ent in mes_entities:
+        for ent in msg_entities:
             if ent.type == "text_link":
                 html_parts.append(text[last_idx : ent.offset])
                 link_text = text[ent.offset : ent.offset + ent.length]
